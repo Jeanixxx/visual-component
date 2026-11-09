@@ -1,6 +1,14 @@
 import type { Analysis, Equation, Parameter, Pin } from "../model/schema";
 import type { PageLines } from "./pdfLines";
-import { parseEquationLine, parseParamRow, parsePinRow, sectionFromHeader, type Section } from "./rows";
+import {
+  assignLimits,
+  isOtherNumberedHeading,
+  parseEquationLine,
+  parseParamRow,
+  parsePinRow,
+  sectionFromHeader,
+  type Section,
+} from "./rows";
 
 export interface DraftMeta {
   component: string;
@@ -27,6 +35,10 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
         section = header;
         continue;
       }
+      if (isOtherNumberedHeading(line)) {
+        section = "other";
+        continue;
+      }
 
       if (section === "pins") {
         const pin = parsePinRow(line);
@@ -39,10 +51,16 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
       if (section !== null && section !== "pins") {
         const param = parseParamRow(line);
         if (param) {
+          const limits = assignLimits(section, param.values, param.symmetric);
           parameters.push({
-            ...param,
+            symbol: param.symbol,
+            name: param.name,
             section,
-            conditions: "",
+            min: limits.min,
+            typ: limits.typ,
+            max: limits.max,
+            unit: param.unit,
+            conditions: limits.note,
             explanation: "",
             page,
             reviewed: false,

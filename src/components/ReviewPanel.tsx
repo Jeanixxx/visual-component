@@ -119,6 +119,7 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
                   <th style={th}>Típ</th>
                   <th style={th}>Máx</th>
                   <th style={th}>Unidad</th>
+                  <th style={th}>Condiciones / nota</th>
                   <th style={th}>Pág.</th>
                   <th style={th}>OK</th>
                   <th style={th} />
@@ -136,6 +137,7 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
                       <td style={td}><input style={cell} value={p.typ ?? ""} onChange={(e) => set({ typ: toNum(e.target.value) })} /></td>
                       <td style={td}><input style={cell} value={p.max ?? ""} onChange={(e) => set({ max: toNum(e.target.value) })} /></td>
                       <td style={td}><input style={cell} value={p.unit} onChange={(e) => set({ unit: e.target.value })} /></td>
+                      <td style={td}><input style={cell} value={p.conditions} placeholder="condiciones o nota" onChange={(e) => set({ conditions: e.target.value })} /></td>
                       <td style={td}>{pageButton(p.page)}</td>
                       <td style={td}>{reviewBox(p.reviewed, (v) => set({ reviewed: v }))}</td>
                       <td style={td}>
