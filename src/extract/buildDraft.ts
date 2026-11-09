@@ -3,6 +3,7 @@ import type { PageLines } from "./pdfLines";
 import {
   assignLimits,
   headerColumns,
+  isConditionLine,
   isOtherNumberedHeading,
   joinLabelLines,
   parseEquationLine,
@@ -47,6 +48,26 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
   let lineNo = 0;
   let balls: { idx: number; lineNo: number; hasDesc: boolean }[] = [];
   let free: { text: string; lineNo: number }[] = [];
+  // Filas de parámetros y líneas de condición cercanas, para unirlas al cerrar cada sección.
+  let paramRefs: { idx: number; lineNo: number }[] = [];
+  let condLines: { text: string; lineNo: number }[] = [];
+  let lastParam: { idx: number; lineNo: number } | null = null;
+  const flushParams = () => {
+    for (const c of condLines) {
+      const prev = [...paramRefs].reverse().find((p) => p.lineNo < c.lineNo && c.lineNo - p.lineNo <= 2);
+      const next = paramRefs.find((p) => p.lineNo > c.lineNo && p.lineNo - c.lineNo <= 2);
+      const dPrev = prev ? c.lineNo - prev.lineNo : Infinity;
+      const dNext = next ? next.lineNo - c.lineNo : Infinity;
+      const target = dPrev <= dNext ? prev ?? next : next ?? prev;
+      if (!target) continue;
+      const p = parameters[target.idx];
+      p.conditions = [p.conditions, c.text].filter(Boolean).join(" · ");
+    }
+    paramRefs = [];
+    condLines = [];
+    lastParam = null;
+  };
+
   // Partes de cada pin BGA: texto antes y después de su identificador, y su propia descripción.
   const ballParts = new Map<number, { prefix: string; own: string; pre: string[]; post: string[] }>();
   const flushBalls = () => {
@@ -86,12 +107,14 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
       const header = sectionFromHeader(line.text);
       if (header) {
         flushBalls();
+        flushParams();
         section = header;
         columns = null;
         continue;
       }
       if (isOtherNumberedHeading(line.text)) {
         flushBalls();
+        flushParams();
         section = "other";
         columns = null;
         continue;
@@ -125,6 +148,11 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
       // el encabezado siguiente, se guarda como "otros" para revisar.
       const paramSection: Section | null = section;
       if (paramSection !== null) {
+        if (/^\(\d+\)$/.test(line.text)) continue;
+        if (isConditionLine(line.text)) {
+          condLines.push({ text: line.text, lineNo });
+          continue;
+        }
         const param = parseParamRow(line.toks);
         if (param) {
           const limits = assignLimits(paramSection, param, columns);
@@ -142,6 +170,16 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
             page,
             reviewed: false,
           });
+          const ref = { idx: parameters.length - 1, lineNo };
+          paramRefs.push(ref);
+          lastParam = ref;
+          continue;
+        }
+        // Final del nombre de la fila anterior que se partió en dos líneas: "minimum setting", "limit".
+        if (lastParam && lineNo === lastParam.lineNo + 1 && /^[a-z][a-z ,-]{2,40}$/.test(line.text)) {
+          const p = parameters[lastParam.idx];
+          p.name = [p.name, line.text].join(" ");
+          lastParam = { idx: lastParam.idx, lineNo };
           continue;
         }
       }
@@ -152,6 +190,7 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
   }
 
   flushBalls();
+  flushParams();
 
   const now = new Date().toISOString();
   return {

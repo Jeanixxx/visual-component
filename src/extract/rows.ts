@@ -41,6 +41,7 @@ const NUMBER = /^-?\d+(?:\.\d+)?$/;
 const SYMBOL_CAPS = /^[A-Z][A-Z0-9_]{0,9}$/;
 const SYMBOL_LOWER = /^[a-z]{1,2}[A-Z0-9][A-Za-z0-9_]{0,8}$/;
 const TRAILING_SYMBOL = /^(?:[A-Z][A-Z0-9_]{0,9}[+-]?|t[a-z]{1,3}|[a-z]{1,2}[A-Z][A-Za-z0-9_]{0,6})$/;
+const STOP_WORDS = new Set(["the", "and", "for", "of", "to", "in", "at", "on", "an", "by", "or", "is", "no", "not", "with"]);
 const CONDITION_WORDS = new Set(["at", "for", "with", "when", "over", "from", "under", "between"]);
 
 export interface ParsedParam {
@@ -87,7 +88,7 @@ export function sectionFromHeader(raw: string): Section | null {
   if (/\b(pin (configuration|functions?|descriptions?|assignments?)|pinout|pines|terminal functions)\b/i.test(line)) return "pins";
   if (/absolute maximum ratings|valores absolutos maximos/i.test(line)) return "absolute-max";
   if (/recommended operating conditions|operating ratings|recommended conditions|condiciones recomendadas/i.test(line)) return "recommended";
-  if (/electrical characteristics|caracteristicas electricas/i.test(line)) return "electrical";
+  if (/electrical characteristics|system characteristics|caracteristicas electricas/i.test(line)) return "electrical";
   if (/timing (requirements|characteristics)|switching characteristics|caracteristicas de conmutacion/i.test(line)) return "timing";
   if (/thermal (information|characteristics|properties|metrics)|dissipation ratings|informacion termica/i.test(line)) return "thermal";
   return null;
@@ -161,7 +162,9 @@ function leadingSymbol(toks: Token[]): { symbol: string; used: number } {
   let prevSingle = /^[A-Z]$/.test(first);
   while (used < toks.length && used < 4) {
     const s = toks[used].s;
-    const continues = (prevSingle && /^[A-Z][A-Z0-9,]*$/.test(s)) || /^_[A-Z0-9_]+$/.test(s) || /^\([A-Za-z0-9]\)$/.test(s);
+    // Subíndice en minúscula tras una sola letra mayúscula ("T stg"), salvo palabras comunes.
+    const lowerSub = used === 1 && /^[A-Z]$/.test(first) && /^[a-z]{1,3}$/.test(s) && !STOP_WORDS.has(s);
+    const continues = (prevSingle && /^[A-Z][A-Z0-9,]*$/.test(s)) || lowerSub || /^_[A-Z0-9_]+$/.test(s) || /^\([A-Za-z0-9]\)$/.test(s);
     if (!continues) break;
     symbol += s;
     prevSingle = /^[A-Z]$/.test(s);
@@ -209,7 +212,9 @@ export function parseParamRow(input: string | Token[]): ParsedParam | null {
     const u2 = toks[k + 2];
     if (NUMBER.test(n1.s) && UNITS.has(u1.s) && NUMBER.test(n2.s) && UNITS.has(u2.s) && u1.s === u2.s) {
       const head = toks.slice(0, k - 2);
-      if (head.length > 0) return rangeRow(head, Number(n1.s), Number(n2.s), u1.s);
+      // Un rango precedido de una condición ("at V CC = 5V to 15V") describe la prueba, no un parámetro.
+      const isCondition = head.some((t) => /[=≤≥<>]/.test(t.s)) || CONDITION_WORDS.has(head[0]?.s.toLowerCase() ?? "");
+      if (head.length > 0 && !isCondition) return rangeRow(head, Number(n1.s), Number(n2.s), u1.s);
     }
   }
 
@@ -245,17 +250,31 @@ export function parseParamRow(input: string | Token[]): ParsedParam | null {
 
   // La condición empieza en la primera palabra de condición o en un comparador.
   let conditions = "";
-  const cut = head.findIndex((t, k) => k > 0 && (CONDITION_WORDS.has(t.s.toLowerCase()) || /[=≤≥<>]/.test(t.s)));
+  let cut = head.findIndex((t, k) => k > 0 && (CONDITION_WORDS.has(t.s.toLowerCase()) || /[=≤≥<>]/.test(t.s)));
+  if (cut > 0 && /[=≤≥<>]/.test(head[cut].s)) {
+    // La condición empieza en el símbolo que precede al comparador ("... current EN = SW", "V IN = ...").
+    let start = cut;
+    if (start - 1 > 0 && /^[A-Z][A-Za-z0-9_,]*$/.test(head[start - 1].s)) start--;
+    if (start - 1 > 0 && /^[A-Z]$/.test(head[start - 1].s)) start--;
+    cut = start;
+  }
   if (cut > 0) {
     conditions = head.slice(cut).map((t) => t.s).join(" ");
     head = head.slice(0, cut);
   }
+
+  // Una lista de números de parte ("NA555, NE555, SA555") es el resto de otra fila, no un parámetro.
+  if (/^(?:[A-Z]{1,3}\d{2,4}[A-Z]?,?\s*)+$/.test(head.map((t) => t.s).join(" "))) return null;
 
   let symbol = "";
   const lead = leadingSymbol(head);
   if (lead.used > 0 && head.length > lead.used) {
     symbol = lead.symbol;
     head = head.slice(lead.used);
+  } else if (lead.used > 0 && head.length === lead.used && lead.symbol.length >= 3) {
+    // Fila con solo el símbolo ("V BP,NEG"): el nombre está en otras líneas, se deja vacío para revisar.
+    symbol = lead.symbol;
+    head = [];
   } else if (head.length > 1 && TRAILING_SYMBOL.test(head[head.length - 1].s)) {
     // Símbolo al final del nombre: "Supply voltage V+", "Dropout voltage VDO", "Turn-on time ton".
     symbol = head[head.length - 1].s;
@@ -264,7 +283,8 @@ export function parseParamRow(input: string | Token[]): ParsedParam | null {
 
   const name = head.map((t) => t.s).join(" ");
   // Un nombre sin al menos tres letras (p. ej. "V" o "at V CC") es un fragmento de condición.
-  if (CONDITION_WORDS.has(head[0].s.toLowerCase()) || name.replace(/[^A-Za-z]/g, "").length < 3) return null;
+  if (symbol === "" && (CONDITION_WORDS.has(head[0].s.toLowerCase()) || name.replace(/[^A-Za-z]/g, "").length < 3)) return null;
+  if (symbol !== "" && name !== "" && name.replace(/[^A-Za-z]/g, "").length < 3) return null;
   // Fragmentos de tabla: un nombre con varios números no es un parámetro.
   if (head.filter((t) => NUMBER.test(t.s)).length >= 2) return null;
 
@@ -375,11 +395,27 @@ export function parseEquationLine(line: string): ParsedEquation | null {
   const m = line.match(/^(.{1,20}?)\s*=\s*(.+)$/);
   if (!m) return null;
   const rhs = m[2].trim();
+  // Los pies de gráficas ("(V OUT = 0.6V) (V OUT = 2.0V)") parten el lado izquierdo con paréntesis sin cerrar.
+  if ((m[1].match(/\(/g) ?? []).length !== (m[1].match(/\)/g) ?? []).length) return null;
   if (rhs.length > 120) return null;
   if (/[°,]/.test(rhs)) return null;
   if (!/[×*·/()]/.test(rhs)) return null;
   if (!/\d/.test(rhs) && !/[A-Z]{1,3}\d?/.test(rhs)) return null;
   return { name: m[1].trim(), expr: rhs };
+}
+
+/**
+ * Línea de condición de prueba, no un parámetro: empieza con una o dos palabras y un comparador
+ * ("VCON = 0.13V, FB = 1V", "V IN = 3.7V, V OUT = 1.4V", "VCON < 0.08V") o con un número y un comparador
+ * ("2.7V ≤ V IN ≤ 5.5V"). Los parámetros reales tienen un nombre descriptivo antes de la condición.
+ */
+export function isConditionLine(text: string): boolean {
+  // Una línea con multiplicación ("t = 1.1 × R × C") es una ecuación, no una condición de prueba.
+  if (/[×·*]/.test(text)) return false;
+  return (
+    /^[A-Za-z_][A-Za-z0-9_,]*(?:\s[A-Za-z0-9_,]+)?\s*[=<>≤≥]/.test(text) ||
+    /^[+\-−–]?\d+(?:\.\d+)?\s?[A-Za-zµμΩ%]*\s*[=<>≤≥]/.test(text)
+  );
 }
 
 /** Une una línea con solo el nombre de un parámetro y la línea de valores que sigue. */
@@ -389,7 +425,7 @@ export function joinLabelLines(lines: Line[]): Line[] {
     const line = lines[i];
     const next = lines[i + 1];
     const isLabel = /^[A-Za-z][A-Za-z ,()\-/]{4,80}$/.test(line.text) && !sectionFromHeader(line.text) && !isOtherNumberedHeading(line.text);
-    if (isLabel && next && !parseParamRow(line.toks)) {
+    if (isLabel && next && /^[+\-−–±]?\d/.test(next.text) && !parseParamRow(line.toks)) {
       const joined: Line = { text: `${line.text} ${next.text}`, toks: [...line.toks, ...next.toks] };
       if (parseParamRow(joined.toks)) {
         out.push(joined);
