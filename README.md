@@ -14,7 +14,9 @@ Hecho:
 
 - **H4:** animación del flujo de corriente. Las corrientes salen de los voltajes simulados (I = ΔV/R, y I_C = I_R2) y los puntos avanzan según la carga acumulada: más corriente, más rápido. Verificado: la carga que entra al condensador es igual a C·ΔV y la ley de corrientes en DIS se cumple.
 
-Pendiente: H5 estrellas y guardado local.
+- **H5:** biblioteca local. Solo se guardan los análisis con estrella, en IndexedDB del navegador; las ediciones de revisión de un análisis con estrella se guardan al hacerlas. Exportar e importar en JSON con validación de formato.
+
+Pendiente: decidir si la biblioteca debe guardar también el PDF, para abrir el visor desde un análisis guardado. Hoy un análisis abierto desde la biblioteca muestra las páginas como texto.
 
 Primer componente de prueba: **NE555** (Texas Instruments).
 

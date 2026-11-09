@@ -7,6 +7,8 @@ import { ReviewPanel } from "./components/ReviewPanel";
 import { extractPageLines, type PageLines } from "./extract/pdfLines";
 import { buildDraft } from "./extract/buildDraft";
 import { Simulator } from "./components/Simulator";
+import { LibraryPanel } from "./components/LibraryPanel";
+import { listSaved, removeSaved, saveStarred, LibraryError } from "./storage/library";
 import type { Analysis } from "./model/schema";
 
 export function App() {
@@ -19,6 +21,8 @@ export function App() {
   const [manufacturer, setManufacturer] = useState("Texas Instruments");
   const [extracting, setExtracting] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [library, setLibrary] = useState<Analysis[]>([]);
+  const [libraryError, setLibraryError] = useState<string | null>(null);
 
   // Libera el documento anterior al cargar otro, y al desmontar.
   useEffect(() => {
@@ -27,6 +31,30 @@ export function App() {
       void doc?.destroy();
     };
   }, [loaded]);
+
+  // Carga la biblioteca guardada al abrir la app.
+  useEffect(() => {
+    refreshLibrary();
+  }, []);
+
+  // Si el análisis abierto tiene estrella, cada cambio de revisión se guarda.
+  useEffect(() => {
+    if (!analysis?.starred) return;
+    saveStarred(analysis).then(refreshLibrary).catch(reportLibraryError);
+  }, [analysis]);
+
+  function reportLibraryError(err: unknown) {
+    setLibraryError(err instanceof LibraryError ? err.message : "No se pudo usar el almacenamiento local.");
+  }
+
+  async function refreshLibrary() {
+    try {
+      setLibrary(await listSaved());
+      setLibraryError(null);
+    } catch (err) {
+      reportLibraryError(err);
+    }
+  }
 
   async function onFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -72,6 +100,56 @@ export function App() {
     }
   }
 
+  /** Marca o desmarca el análisis actual. Con estrella se guarda en la biblioteca. */
+  async function toggleStar() {
+    if (!analysis) return;
+    if (analysis.starred) {
+      setAnalysis({ ...analysis, starred: false });
+      try {
+        await removeSaved(analysis.id);
+        await refreshLibrary();
+      } catch (err) {
+        reportLibraryError(err);
+      }
+    } else {
+      const next = { ...analysis, starred: true, updatedAt: new Date().toISOString() };
+      setAnalysis(next);
+      try {
+        await saveStarred(next);
+        await refreshLibrary();
+      } catch (err) {
+        reportLibraryError(err);
+      }
+    }
+  }
+
+  async function removeFromLibrary(id: string) {
+    try {
+      await removeSaved(id);
+      if (analysis?.id === id) setAnalysis({ ...analysis, starred: false });
+      await refreshLibrary();
+    } catch (err) {
+      reportLibraryError(err);
+    }
+  }
+
+  async function importToLibrary(list: Analysis[]) {
+    try {
+      for (const a of list) await saveStarred(a);
+      await refreshLibrary();
+    } catch (err) {
+      reportLibraryError(err);
+      throw err;
+    }
+  }
+
+  function openFromLibrary(a: Analysis) {
+    setLoaded(null);
+    setError(null);
+    setAnalysis(a);
+    document.getElementById("revision")?.scrollIntoView({ behavior: "smooth" });
+  }
+
   return (
     <main style={{ fontFamily: "system-ui, sans-serif", padding: 16, maxWidth: 960, margin: "0 auto" }}>
       <h1>{APP_NAME}</h1>
@@ -112,26 +190,41 @@ export function App() {
         </section>
       )}
 
+      {analysis && (
+        <section id="revision">
+          <h2>
+            Revisión: {analysis.component} ({analysis.manufacturer})
+          </h2>
+          <button onClick={toggleStar} style={{ marginBottom: 8 }}>
+            {analysis.starred ? "★ Quitar de la biblioteca" : "☆ Guardar con estrella"}
+          </button>
+          <ReviewPanel
+            analysis={analysis}
+            onChange={setAnalysis}
+            onShowPage={
+              loaded
+                ? (p) => {
+                    setPage(p);
+                    document.getElementById("visor")?.scrollIntoView({ behavior: "smooth" });
+                  }
+                : undefined
+            }
+          />
+        </section>
+      )}
+
       <section>
         <h2>Simulador</h2>
         <Simulator />
       </section>
 
-      {analysis && (
-        <section>
-          <h2>
-            Revisión: {analysis.component} ({analysis.manufacturer})
-          </h2>
-          <ReviewPanel
-            analysis={analysis}
-            onChange={setAnalysis}
-            onShowPage={(p) => {
-              setPage(p);
-              document.getElementById("visor")?.scrollIntoView({ behavior: "smooth" });
-            }}
-          />
-        </section>
-      )}
+      <LibraryPanel
+        items={library}
+        error={libraryError}
+        onOpen={openFromLibrary}
+        onRemove={removeFromLibrary}
+        onImport={importToLibrary}
+      />
     </main>
   );
 }

@@ -4,7 +4,8 @@ import type { Analysis, Equation, ParamSection, Parameter, Pin } from "../model/
 interface Props {
   analysis: Analysis;
   onChange: (next: Analysis) => void;
-  onShowPage: (page: number) => void;
+  /** Sin PDF cargado (análisis abierto desde la biblioteca) no hay visor: las páginas son solo texto. */
+  onShowPage?: (page: number) => void;
 }
 
 const SECTION_LABEL: Record<ParamSection, string> = {
@@ -40,11 +41,14 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
   const touch = (next: Partial<Analysis>) =>
     onChange({ ...analysis, ...next, updatedAt: new Date().toISOString() });
 
-  const pageButton = (page: number) => (
-    <button onClick={() => onShowPage(page)} style={{ fontSize: 12 }}>
-      pág. {page}
-    </button>
-  );
+  const pageButton = (page: number) =>
+    onShowPage ? (
+      <button onClick={() => onShowPage(page)} style={{ fontSize: 12 }}>
+        pág. {page}
+      </button>
+    ) : (
+      <span style={{ fontSize: 12 }}>pág. {page}</span>
+    );
 
   const reviewBox = (checked: boolean, onToggle: (v: boolean) => void) => (
     <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} aria-label="revisado" />
