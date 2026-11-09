@@ -18,7 +18,11 @@ Hecho:
 
 Pendiente: decidir si la biblioteca debe guardar también el PDF, para abrir el visor desde un análisis guardado. Hoy un análisis abierto desde la biblioteca muestra las páginas como texto.
 
-Primer componente de prueba: **NE555** (Texas Instruments).
+Motor genérico (no ligado a un componente):
+- **Extracción** (src/extract): reglas para cualquier datasheet. Probado con el NE555 real y con tres documentos sintéticos de estilos distintos (tablas partidas, símbolo al final, español con índice). Lo que no se reconoce se marca para revisión; nunca se inventa un valor.
+- **Simulación** (src/sim/templates.ts): cada circuito es una plantilla con sus parámetros, su netlist y su medida frente a la ecuación de referencia. Plantillas: astable NE555, filtro RC (verificado con dos juegos de valores), y netlist libre.
+
+Pendiente: enlazar automáticamente un análisis con una plantilla y capturar la tabla eléctrica del NE555 por líneas.
 
 Ver el plan completo en la documentación del proyecto.
 

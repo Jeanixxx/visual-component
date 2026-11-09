@@ -3,6 +3,7 @@ import type { PageLines } from "./pdfLines";
 import {
   assignLimits,
   isOtherNumberedHeading,
+  joinLabelLines,
   parseEquationLine,
   parseParamRow,
   parsePinRow,
@@ -28,7 +29,8 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
   const equations: Equation[] = [];
   let section: Section | null = null;
 
-  for (const { page, lines } of pages) {
+  for (const { page, lines: rawLines } of pages) {
+    const lines = joinLabelLines(rawLines);
     for (const line of lines) {
       const header = sectionFromHeader(line);
       if (header) {
@@ -48,14 +50,17 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
         }
       }
 
-      if (section !== null && section !== "pins") {
+      // Dentro de la tabla de pines una fila de parámetros no se descarta: si no se detectó
+      // el encabezado siguiente, se guarda como "otros" para revisar.
+      const paramSection: Section | null = section === "pins" ? "other" : section;
+      if (paramSection !== null) {
         const param = parseParamRow(line);
         if (param) {
-          const limits = assignLimits(section, param.values, param.symmetric);
+          const limits = assignLimits(paramSection, param.values, param.symmetric);
           parameters.push({
             symbol: param.symbol,
             name: param.name,
-            section,
+            section: paramSection,
             min: limits.min,
             typ: limits.typ,
             max: limits.max,

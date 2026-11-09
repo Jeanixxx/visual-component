@@ -12,6 +12,8 @@ const SECTION_LABEL: Record<ParamSection, string> = {
   "absolute-max": "Valores absolutos máximos",
   recommended: "Condiciones recomendadas",
   electrical: "Características eléctricas",
+  timing: "Temporización y conmutación",
+  thermal: "Térmicos y disipación",
   other: "Otros",
 };
 
@@ -54,7 +56,7 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
     <input type="checkbox" checked={checked} onChange={(e) => onToggle(e.target.checked)} aria-label="revisado" />
   );
 
-  const sections: ParamSection[] = ["absolute-max", "recommended", "electrical", "other"];
+  const sections: ParamSection[] = ["absolute-max", "recommended", "electrical", "timing", "thermal", "other"];
 
   return (
     <section style={{ overflowX: "auto" }}>

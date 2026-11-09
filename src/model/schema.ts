@@ -22,7 +22,7 @@ export interface Pin extends SourceRef, Reviewable {
 }
 
 /** Sección del datasheet donde aparece un parámetro. */
-export type ParamSection = "absolute-max" | "recommended" | "electrical" | "other";
+export type ParamSection = "absolute-max" | "recommended" | "electrical" | "timing" | "thermal" | "other";
 
 export interface Parameter extends SourceRef, Reviewable {
   name: string;
