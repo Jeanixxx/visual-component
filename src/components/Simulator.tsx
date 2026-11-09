@@ -2,6 +2,8 @@ import { useState, type CSSProperties } from "react";
 import { DEFAULT_ASTABLE, astableNetlist, expectedTimes, type AstableParams } from "../sim/ne555";
 import { runNetlist } from "../sim/runSim";
 import { measureAstable, readWaveform, relativeError, type AstableMeasure } from "../sim/measure";
+import { buildFlow, type FlowData } from "../sim/flow";
+import { FlowAnimation } from "./FlowAnimation";
 
 const TOLERANCE_PCT = 5;
 
@@ -54,7 +56,7 @@ export function Simulator() {
   });
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ measure: AstableMeasure; p: AstableParams } | null>(null);
+  const [result, setResult] = useState<{ measure: AstableMeasure; flow: FlowData; p: AstableParams } | null>(null);
 
   function toParams(): AstableParams | null {
     const vcc = Number(params.vcc);
@@ -75,7 +77,11 @@ export function Simulator() {
     setError(null);
     try {
       const res = await runNetlist(astableNetlist(p));
-      setResult({ measure: measureAstable(readWaveform(res)), p });
+      setResult({
+        measure: measureAstable(readWaveform(res)),
+        flow: buildFlow(res, p.r1, p.r2),
+        p,
+      });
     } catch (err) {
       setResult(null);
       setError(err instanceof Error ? err.message : "La simulación falló.");
@@ -142,6 +148,7 @@ export function Simulator() {
             El primer intervalo alto se excluye: parte de un condensador descargado.
           </p>
           <Plot measure={result.measure} vcc={result.p.vcc} />
+          <FlowAnimation flow={result.flow} vcc={result.p.vcc} />
         </div>
       )}
     </section>

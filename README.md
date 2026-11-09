@@ -12,7 +12,9 @@ Hecho:
 - **H2:** extracción local, sin servicios externos. Reglas de texto detectan pines, parámetros (con sección) y ecuaciones; un panel de revisión deja confirmar cada dato contra su página.
 - **H3:** simulación local del NE555 astable con ngspice (WebAssembly). Modelo ideal basado en el diagrama de bloques del datasheet, verificado contra t_alto ≈ 0.693·(R1+R2)·C y t_bajo ≈ 0.693·R2·C dentro de ±5 %. El motor (~20 MB) se carga solo al simular.
 
-Pendiente: H4 animación de corriente y voltaje, H5 estrellas y guardado local.
+- **H4:** animación del flujo de corriente. Las corrientes salen de los voltajes simulados (I = ΔV/R, y I_C = I_R2) y los puntos avanzan según la carga acumulada: más corriente, más rápido. Verificado: la carga que entra al condensador es igual a C·ΔV y la ley de corrientes en DIS se cumple.
+
+Pendiente: H5 estrellas y guardado local.
 
 Primer componente de prueba: **NE555** (Texas Instruments).
 
