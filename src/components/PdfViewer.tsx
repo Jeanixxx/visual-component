@@ -3,11 +3,12 @@ import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 interface Props {
   doc: PDFDocumentProxy;
+  page: number;
+  onPageChange: (page: number) => void;
 }
 
 /** Visor de páginas de un PDF: renderiza una página a la vez en un canvas. */
-export function PdfViewer({ doc }: Props) {
-  const [page, setPage] = useState(1);
+export function PdfViewer({ doc, page, onPageChange }: Props) {
   const [error, setError] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -56,15 +57,15 @@ export function PdfViewer({ doc }: Props) {
   const last = doc.numPages;
 
   return (
-    <section>
-      <nav style={{ display: "flex", alignItems: "center", gap: 12, margin: "12px 0" }}>
-        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+    <section id="visor">
+      <nav style={{ display: "flex", alignItems: "center", gap: 12, margin: "12px 0", flexWrap: "wrap" }}>
+        <button onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page <= 1}>
           ← Anterior
         </button>
         <span>
           Página {page} de {last}
         </span>
-        <button onClick={() => setPage((p) => Math.min(last, p + 1))} disabled={page >= last}>
+        <button onClick={() => onPageChange(Math.min(last, page + 1))} disabled={page >= last}>
           Siguiente →
         </button>
       </nav>

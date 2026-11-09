@@ -11,7 +11,7 @@ export interface SourceRef {
 }
 
 export interface Reviewable {
-  /** "draft" = extraído y sin revisar; "reviewed" = confirmado por el usuario. */
+  /** false = borrador extraído y sin revisar; true = confirmado por el usuario. */
   reviewed: boolean;
 }
 
@@ -21,8 +21,13 @@ export interface Pin extends SourceRef, Reviewable {
   role: string;
 }
 
+/** Sección del datasheet donde aparece un parámetro. */
+export type ParamSection = "absolute-max" | "recommended" | "electrical" | "other";
+
 export interface Parameter extends SourceRef, Reviewable {
+  name: string;
   symbol: string;
+  section: ParamSection;
   min: number | null;
   typ: number | null;
   max: number | null;
@@ -34,7 +39,7 @@ export interface Parameter extends SourceRef, Reviewable {
 
 export interface Equation extends SourceRef, Reviewable {
   name: string;
-  /** Expresión en forma textual, p. ej. "0.693*(R1+R2)*C". */
+  /** Expresión tal como aparece en el datasheet, p. ej. "0.693 × (R1 + R2) × C". */
   expr: string;
 }
 

@@ -6,7 +6,14 @@ Subes el PDF del fabricante, revisas lo que la app extrajo (cada dato con su pá
 
 ## Estado
 
-H0 en curso: estructura del proyecto y esquema de datos. Primer componente de prueba: **NE555** (Texas Instruments).
+Hecho:
+- **H0:** estructura del proyecto y esquema de datos.
+- **H1:** carga de PDF con límites, visor de páginas.
+- **H2 (en curso):** extracción local, sin servicios externos. Reglas de texto detectan pines, parámetros (con sección), ecuaciones; un panel de revisión deja confirmar cada dato contra su página.
+
+Pendiente: H3 simulación con ngspice local, H4 animación, H5 estrellas y guardado local.
+
+Primer componente de prueba: **NE555** (Texas Instruments).
 
 Ver el plan completo en la documentación del proyecto.
 
