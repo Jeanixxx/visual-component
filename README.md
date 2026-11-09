@@ -26,6 +26,10 @@ Motor genérico (no ligado a un componente):
 
 Validado con datasheets reales de TI, onsemi, Nexperia, Everlight, Sharp (escaneo), Mornsun, Microne, Hongfa y módulos (ESP8266, HC-SR04). Los resultados varían por documento; lo que no se reconoce se deja para revisión manual.
 
+- **Modo flexible** (src/extract/buildDraft.ts): si con los encabezados de sección reconocidos salen menos de 3 parámetros, la app vuelve a leer sin depender de ellos (todo va a «Otros»). Los pines sin encabezado se detectan por lista numerada o de bolas BGA. Probado quitando los encabezados a documentos reales: los parámetros salen igual o mejor.
+- **Informe del análisis** (src/components/ReportPanel.tsx): explica qué se leyó, qué modo se usó, qué encabezados se reconocieron y qué líneas con valor y unidad no se pudieron interpretar; muestra el texto detectado de cada página y permite copiar el informe o el texto completo.
+- **Filas manuales**: «+ Agregar pin / parámetro / ecuación» en la revisión, para completar lo que el análisis no pudo leer.
+
 Pendiente: enlazar automáticamente un análisis con una plantilla y capturar la tabla eléctrica del NE555 por líneas.
 
 Ver el plan completo en la documentación del proyecto.

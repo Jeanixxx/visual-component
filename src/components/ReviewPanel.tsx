@@ -6,6 +6,8 @@ interface Props {
   onChange: (next: Analysis) => void;
   /** Sin PDF cargado (análisis abierto desde la biblioteca) no hay visor: las páginas son solo texto. */
   onShowPage?: (page: number) => void;
+  /** Página que se está viendo: las filas que se agregan a mano se anotan con ella. */
+  currentPage?: number;
 }
 
 const SECTION_LABEL: Record<ParamSection, string> = {
@@ -36,7 +38,7 @@ const th: CSSProperties = { textAlign: "left", fontSize: 12, color: "#555", padd
 const td: CSSProperties = { padding: 4, verticalAlign: "top" };
 
 /** Panel de revisión: cada fila es un borrador hasta que el usuario la marca como revisada. */
-export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
+export function ReviewPanel({ analysis, onChange, onShowPage, currentPage = 1 }: Props) {
   const total = analysis.pins.length + analysis.parameters.length + analysis.equations.length;
   const reviewed = [...analysis.pins, ...analysis.parameters, ...analysis.equations].filter((x) => x.reviewed).length;
 
@@ -103,6 +105,19 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
           ))}
         </tbody>
       </table>
+      <button
+        style={{ margin: "6px 0" }}
+        onClick={() =>
+          touch({
+            pins: [
+              ...analysis.pins,
+              { number: Math.max(0, ...analysis.pins.map((p) => p.number)) + 1, name: "", role: "", page: currentPage, reviewed: false },
+            ],
+          })
+        }
+      >
+        + Agregar pin
+      </button>
 
       {sections.map((sec) => {
         const rows = analysis.parameters
@@ -154,6 +169,20 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
         );
       })}
 
+      <button
+        style={{ margin: "6px 0" }}
+        onClick={() =>
+          touch({
+            parameters: [
+              ...analysis.parameters,
+              { name: "", symbol: "", section: "other", min: null, typ: null, max: null, unit: "", conditions: "", explanation: "", page: currentPage, reviewed: false },
+            ],
+          })
+        }
+      >
+        + Agregar parámetro
+      </button>
+
       <h3>Ecuaciones ({analysis.equations.length})</h3>
       <table style={{ minWidth: 480, width: "100%", borderCollapse: "collapse" }}>
         <thead>
@@ -185,6 +214,12 @@ export function ReviewPanel({ analysis, onChange, onShowPage }: Props) {
           ))}
         </tbody>
       </table>
+      <button
+        style={{ margin: "6px 0" }}
+        onClick={() => touch({ equations: [...analysis.equations, { name: "", expr: "", page: currentPage, reviewed: false }] })}
+      >
+        + Agregar ecuación
+      </button>
     </section>
   );
 }

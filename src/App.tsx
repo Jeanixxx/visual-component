@@ -6,7 +6,8 @@ import { PdfViewer } from "./components/PdfViewer";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { extractPageLines, type PageLines } from "./extract/pdfLines";
 import { looksScanned, ocrPdf, OCR_MAX_PAGES } from "./ocr/ocr";
-import { buildDraft } from "./extract/buildDraft";
+import { buildDraftWithReport, type DraftReport } from "./extract/buildDraft";
+import { ReportPanel } from "./components/ReportPanel";
 import { Simulator } from "./components/Simulator";
 import { LibraryPanel } from "./components/LibraryPanel";
 import { listSaved, removeSaved, saveStarred, LibraryError } from "./storage/library";
@@ -22,6 +23,8 @@ export function App() {
   const [manufacturer, setManufacturer] = useState("Texas Instruments");
   const [extracting, setExtracting] = useState<number | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [report, setReport] = useState<DraftReport | null>(null);
+  const [pagesText, setPagesText] = useState<PageLines[]>([]);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [library, setLibrary] = useState<Analysis[]>([]);
   const [libraryError, setLibraryError] = useState<string | null>(null);
@@ -66,6 +69,8 @@ export function App() {
     setBusy(true);
     setError(null);
     setAnalysis(null);
+    setReport(null);
+    setPagesText([]);
     try {
       const next = await loadPdf(file);
       setLoaded(next);
@@ -103,7 +108,7 @@ export function App() {
             : "El texto se obtuvo con OCR. Revisa los valores con cuidado: el OCR puede confundir caracteres.",
         );
       }
-      const draft = buildDraft(pages, {
+      const result = buildDraftWithReport(pages, {
         component: component.trim() || "Componente",
         manufacturer: manufacturer.trim(),
         fileName: loaded.fileName,
@@ -111,7 +116,10 @@ export function App() {
         pages: loaded.pages,
         ocr: usedOcr,
       });
+      const draft = result.analysis;
       setAnalysis(draft);
+      setReport(result.report);
+      setPagesText(pages);
       if (draft.pins.length === 0 && draft.parameters.length === 0) {
         setError(
           "No encontré pines ni parámetros en este PDF. Puede no ser una hoja de datos de componente, o su texto no es seleccionable.",
@@ -224,8 +232,10 @@ export function App() {
           <button onClick={toggleStar} style={{ marginBottom: 8 }}>
             {analysis.starred ? "★ Quitar de la biblioteca" : "☆ Guardar con estrella"}
           </button>
+          {report && <ReportPanel report={report} analysis={analysis} pagesText={pagesText} currentPage={page} />}
           <ReviewPanel
             analysis={analysis}
+            currentPage={page}
             onChange={setAnalysis}
             onShowPage={
               loaded

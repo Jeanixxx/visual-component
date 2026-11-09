@@ -487,3 +487,15 @@ export function joinLabelLines(lines: Line[]): Line[] {
   }
   return out;
 }
+
+/**
+ * ¿La línea parece una fila de especificación? Tiene un número seguido de una unidad conocida.
+ * Sirve para el informe: cuántas líneas con datos hay, y cuáles no se pudieron interpretar.
+ */
+export function looksLikeSpecLine(text: string): boolean {
+  const toks = normalize(lineFromText(text).toks);
+  for (let i = 1; i < toks.length; i++) {
+    if (UNITS.has(toks[i].s) && (NUMBER.test(toks[i - 1].s) || /^±\d/.test(toks[i - 1].s))) return true;
+  }
+  return false;
+}
