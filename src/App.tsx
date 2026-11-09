@@ -82,17 +82,21 @@ export function App() {
     try {
       for (let p = 1; p <= loaded.pages; p++) {
         setExtracting(p);
-        pages.push({ page: p, lines: await extractPageLines(loaded.doc, p) });
+        pages.push(await extractPageLines(loaded.doc, p));
       }
-      setAnalysis(
-        buildDraft(pages, {
-          component: component.trim() || "Componente",
-          manufacturer: manufacturer.trim(),
-          fileName: loaded.fileName,
-          hash: loaded.hash,
-          pages: loaded.pages,
-        }),
-      );
+      const draft = buildDraft(pages, {
+        component: component.trim() || "Componente",
+        manufacturer: manufacturer.trim(),
+        fileName: loaded.fileName,
+        hash: loaded.hash,
+        pages: loaded.pages,
+      });
+      setAnalysis(draft);
+      if (draft.pins.length === 0 && draft.parameters.length === 0) {
+        setError(
+          "No encontré pines ni parámetros en este PDF. Puede no ser una hoja de datos de componente, o su texto no es seleccionable.",
+        );
+      }
     } catch {
       setError("No se pudo extraer el texto de este PDF.");
     } finally {

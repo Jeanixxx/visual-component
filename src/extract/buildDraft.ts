@@ -2,12 +2,15 @@ import type { Analysis, Equation, Parameter, Pin } from "../model/schema";
 import type { PageLines } from "./pdfLines";
 import {
   assignLimits,
+  headerColumns,
   isOtherNumberedHeading,
   joinLabelLines,
   parseEquationLine,
   parseParamRow,
   parsePinRow,
   sectionFromHeader,
+  type Columns,
+  type Line,
   type Section,
 } from "./rows";
 
@@ -28,22 +31,35 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
   const parameters: Parameter[] = [];
   const equations: Equation[] = [];
   let section: Section | null = null;
+  // Columnas Min / Typ / Max de la tabla en curso, si su encabezado se ha visto.
+  let columns: Columns | null = null;
 
-  for (const { page, lines: rawLines } of pages) {
-    const lines = joinLabelLines(rawLines);
+  for (const pg of pages) {
+    const { page } = pg;
+    const lines: Line[] = joinLabelLines(
+      pg.lines.map((text, i) => ({ text, toks: pg.tokens[i] ?? [] })),
+    );
     for (const line of lines) {
-      const header = sectionFromHeader(line);
+      const header = sectionFromHeader(line.text);
       if (header) {
         section = header;
+        columns = null;
         continue;
       }
-      if (isOtherNumberedHeading(line)) {
+      if (isOtherNumberedHeading(line.text)) {
         section = "other";
+        columns = null;
+        continue;
+      }
+
+      const headCols = headerColumns(line.toks);
+      if (headCols) {
+        columns = headCols;
         continue;
       }
 
       if (section === "pins") {
-        const pin = parsePinRow(line);
+        const pin = parsePinRow(line.text);
         if (pin) {
           pins.push({ ...pin, page, reviewed: false });
           continue;
@@ -54,9 +70,10 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
       // el encabezado siguiente, se guarda como "otros" para revisar.
       const paramSection: Section | null = section === "pins" ? "other" : section;
       if (paramSection !== null) {
-        const param = parseParamRow(line);
+        const param = parseParamRow(line.toks);
         if (param) {
-          const limits = assignLimits(paramSection, param.values, param.symmetric);
+          const limits = assignLimits(paramSection, param, columns);
+          const notes = [param.conditions, limits.note].filter(Boolean).join(" · ");
           parameters.push({
             symbol: param.symbol,
             name: param.name,
@@ -65,7 +82,7 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
             typ: limits.typ,
             max: limits.max,
             unit: param.unit,
-            conditions: limits.note,
+            conditions: notes,
             explanation: "",
             page,
             reviewed: false,
@@ -74,7 +91,7 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
         }
       }
 
-      const eq = parseEquationLine(line);
+      const eq = parseEquationLine(line.text);
       if (eq) equations.push({ ...eq, page, reviewed: false });
     }
   }
