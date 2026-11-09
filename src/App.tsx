@@ -6,6 +6,7 @@ import { PdfViewer } from "./components/PdfViewer";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { extractPageLines, type PageLines } from "./extract/pdfLines";
 import { buildDraft } from "./extract/buildDraft";
+import { Simulator } from "./components/Simulator";
 import type { Analysis } from "./model/schema";
 
 export function App() {
@@ -110,6 +111,11 @@ export function App() {
           <PdfViewer doc={loaded.doc} page={page} onPageChange={setPage} />
         </section>
       )}
+
+      <section>
+        <h2>Simulador</h2>
+        <Simulator />
+      </section>
 
       {analysis && (
         <section>

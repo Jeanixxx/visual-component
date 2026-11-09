@@ -9,9 +9,10 @@ Subes el PDF del fabricante, revisas lo que la app extrajo (cada dato con su pá
 Hecho:
 - **H0:** estructura del proyecto y esquema de datos.
 - **H1:** carga de PDF con límites, visor de páginas.
-- **H2 (en curso):** extracción local, sin servicios externos. Reglas de texto detectan pines, parámetros (con sección), ecuaciones; un panel de revisión deja confirmar cada dato contra su página.
+- **H2:** extracción local, sin servicios externos. Reglas de texto detectan pines, parámetros (con sección) y ecuaciones; un panel de revisión deja confirmar cada dato contra su página.
+- **H3:** simulación local del NE555 astable con ngspice (WebAssembly). Modelo ideal basado en el diagrama de bloques del datasheet, verificado contra t_alto ≈ 0.693·(R1+R2)·C y t_bajo ≈ 0.693·R2·C dentro de ±5 %. El motor (~20 MB) se carga solo al simular.
 
-Pendiente: H3 simulación con ngspice local, H4 animación, H5 estrellas y guardado local.
+Pendiente: H4 animación de corriente y voltaje, H5 estrellas y guardado local.
 
 Primer componente de prueba: **NE555** (Texas Instruments).
 
