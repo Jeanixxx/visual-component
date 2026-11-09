@@ -357,9 +357,17 @@ export function parsePinRow(line: string): ParsedPin | null {
   if (nameFirst) {
     return { number: Number(nameFirst[2]), name: nameFirst[1], role: nameFirst[3].trim() };
   }
-  const bga = line.match(/^([A-Z]\d{1,2})\s+([A-Z][A-Za-z0-9_\/+ -]{1,40})$/);
-  if (bga) return { number: 0, name: bga[1], role: bga[2].trim() };
   return null;
+}
+
+/**
+ * Fila de pin de encapsulado BGA: identificador de bola ("A1", "C3") y nombre en mayúsculas.
+ * La función del pin puede venir en la misma línea o en líneas cercanas (ver buildDraft).
+ */
+export function parseBallRow(line: string): { ball: string; name: string; desc: string } | null {
+  const m = line.match(/^([A-Z]\d{1,2})\s+([A-Z][A-Z0-9_\/+]{0,11})(?:\s+(.*))?$/);
+  if (!m) return null;
+  return { ball: m[1], name: m[2], desc: (m[3] ?? "").trim() };
 }
 
 /** Línea de ecuación de diseño, p. ej. "t = 0.693 × (R1 + R2) × C". Descarta condiciones de tabla. */
