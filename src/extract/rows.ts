@@ -33,11 +33,13 @@ const UNITS = new Set([
   "H", "mH", "µH", "μH", "uH", "nH",
   "V/µs", "V/μs", "V/us", "V/ms", "A/µs", "A/μs", "A/us",
   "dB", "dBm", "%", "ppm", "LSB", "bit", "bits", "Vrms", "mVrms", "µVrms", "μVrms", "V/V", "A/V", "V/A",
-  "kV",
+  "kV", "℃", "VDC", "VAC", "%/°C", "%/℃", "ppm/°C", "mV/°C", "mV/V", "Vp-p", "mVp-p",
 ]);
 
-const SIGN = new Set(["−", "–", "-", "+", "+-", "±"]);
-const NUMBER = /^-?\d+(?:\.\d+)?$/;
+// Signos que se unen al número siguiente. El "-" ASCII suelto y "--" son marcadores de dato ausente.
+const SIGN = new Set(["−", "–", "+", "+-", "±"]);
+const NUMBER = /^[+-]?\d+(?:\.\d+)?$/;
+const PLACEHOLDER = new Set(["—", "–", "-", "--", "---", "–-", "~", "—-", "N/A", "n/a"]);
 const SYMBOL_CAPS = /^[A-Z][A-Z0-9_]{0,9}$/;
 const SYMBOL_LOWER = /^[a-z]{1,2}[A-Z0-9][A-Za-z0-9_]{0,8}$/;
 const TRAILING_SYMBOL = /^(?:[A-Z][A-Z0-9_]{0,9}[+-]?|t[a-z]{1,3}|[a-z]{1,2}[A-Z][A-Za-z0-9_]{0,6})$/;
@@ -86,18 +88,22 @@ export function sectionFromHeader(raw: string): Section | null {
   if (/\.{4,}/.test(raw)) return null;
   const line = plain(raw);
   if (/\b(pin (configuration|functions?|descriptions?|assignments?)|pinout|pines|terminal functions)\b/i.test(line)) return "pins";
-  if (/absolute maximum ratings|valores absolutos maximos/i.test(line)) return "absolute-max";
+  // Páginas de encapsulado: cierran la tabla de pines para que el dibujo no se lea como pines.
+  if (/package (dimensions|outline|information|drawing|option)|mechanical (data|drawing)|marking diagram|ordering information|tape and reel|soldering (information|profile)|reel dimensions/i.test(line)) return "other";
+  if (/absolute maximum ratings|maximum ratings|limiting values|valores absolutos maximos/i.test(line)) return "absolute-max";
   if (/recommended operating conditions|operating ratings|recommended conditions|condiciones recomendadas/i.test(line)) return "recommended";
-  if (/electrical characteristics|system characteristics|caracteristicas electricas/i.test(line)) return "electrical";
-  if (/timing (requirements|characteristics)|switching characteristics|caracteristicas de conmutacion/i.test(line)) return "timing";
+  if (/electro-?optical|opto-?electrical|electrical-optical|electrical characteristics|system characteristics|(input|output|general) specifications|caracteristicas electricas/i.test(line)) return "electrical";
+  if (/timing (requirements|characteristics)|switching (characteristics|times)|dynamic characteristics|caracteristicas de conmutacion/i.test(line)) return "timing";
   if (/thermal (information|characteristics|properties|metrics)|dissipation ratings|informacion termica/i.test(line)) return "thermal";
+  // "10. Characteristics" o "Table 7. Characteristics" a secas.
+  if (/^(table\s+\d+\.?\s*)?(\d+(\.\d+)*\.?\s*)?characteristics\s*$/i.test(line.trim())) return "electrical";
   return null;
 }
 
 /** Encabezado numerado de otra sección (p. ej. "5.4 Thermal Information"): cierra la sección anterior. */
 export function isOtherNumberedHeading(line: string): boolean {
   if (/\.{4,}/.test(line)) return false;
-  return /^\d+(\.\d+)*\s+[A-Z][a-z]/.test(line) || /^\d\s+[A-Z][a-z]+(\s[A-Za-z]+)*$/.test(line);
+  return /^\d+(\.\d+)*\.?\s+[A-Z][a-z]/.test(line) || /^\d\s+[A-Z][a-z]+(\s[A-Za-z]+)*$/.test(line);
 }
 
 /** Encabezado de tabla con columnas Min / Typ / Max. Devuelve la posición de cada una. */
@@ -123,8 +129,11 @@ function normalize(toks: Token[]): Token[] {
   for (let i = 0; i < toks.length; i++) {
     const t = toks[i];
     const next = toks[i + 1];
-    if (SIGN.has(t.s) && next && /^\d/.test(next.s)) {
-      const sign = t.s === "+" ? "+" : t.s === "±" ? "±" : "-";
+    const prevTok = merged[merged.length - 1];
+    // Un signo entre dos números ("1.2 – 1.4") es un marcador de dato ausente, no un signo menos.
+    const afterNumber = prevTok !== undefined && /^[+\-−–]?\d/.test(prevTok.s);
+    if (SIGN.has(t.s) && next && /^\d/.test(next.s) && !afterNumber) {
+      const sign = t.s === "+" ? "+" : t.s === "±" || t.s === "+-" ? "±" : "-";
       merged.push({ s: sign + next.s, xc: next.xc });
       i++;
       continue;
@@ -163,7 +172,7 @@ function leadingSymbol(toks: Token[]): { symbol: string; used: number } {
   while (used < toks.length && used < 4) {
     const s = toks[used].s;
     // Subíndice en minúscula tras una sola letra mayúscula ("T stg"), salvo palabras comunes.
-    const lowerSub = used === 1 && /^[A-Z]$/.test(first) && /^[a-z]{1,3}$/.test(s) && !STOP_WORDS.has(s);
+    const lowerSub = used === 1 && /^[A-Z]$/.test(first) && /^[a-z][a-z()\-,]{0,7}$/.test(s) && !STOP_WORDS.has(s);
     const continues = (prevSingle && /^[A-Z][A-Z0-9,]*$/.test(s)) || lowerSub || /^_[A-Z0-9_]+$/.test(s) || /^\([A-Za-z0-9]\)$/.test(s);
     if (!continues) break;
     symbol += s;
@@ -218,27 +227,48 @@ export function parseParamRow(input: string | Token[]): ParsedParam | null {
     }
   }
 
-  const unit = toks[toks.length - 1].s;
-  if (!UNITS.has(unit)) return null;
-
+  // Grupo de valores: el primer símbolo de unidad precedido por 1 a 3 valores (números o marcadores)
+  // y que no esté seguido de más valores. Lo que sigue a la unidad es la condición de la fila.
+  const isValueTok = (s: string) => NUMBER.test(s) || /^±\d/.test(s) || PLACEHOLDER.has(s);
+  let unit = "";
+  let unitIdx = -1;
   const vals: (number | null)[] = [];
   const valueXc: number[] = [];
   let symmetric = false;
-  let i = toks.length - 2;
-  while (i >= 0 && vals.length < 3) {
-    const s = toks[i].s;
-    if (s === "—" || s === "–") {
-      vals.unshift(null);
-      valueXc.unshift(toks[i].xc);
-    } else if (NUMBER.test(s)) {
-      vals.unshift(Number(s));
-      valueXc.unshift(toks[i].xc);
-    } else {
-      break;
+  let i = -1;
+  for (let u = 1; u < toks.length; u++) {
+    if (!UNITS.has(toks[u].s) || !isValueTok(toks[u - 1].s)) continue;
+    const nextTok = toks[u + 1];
+    if (nextTok !== undefined && isValueTok(nextTok.s)) continue;
+    const gv: (number | null)[] = [];
+    const gx: number[] = [];
+    let sym = false;
+    let j = u - 1;
+    while (j >= 0 && gv.length < 3 && isValueTok(toks[j].s)) {
+      const s = toks[j].s;
+      if (/^±\d/.test(s)) {
+        gv.unshift(Number(s.slice(1)));
+        sym = true;
+      } else if (NUMBER.test(s)) {
+        gv.unshift(Number(s));
+      } else gv.unshift(null);
+      gx.unshift(toks[j].xc);
+      j--;
     }
-    i--;
+    if (gv.length === 0 || gv.every((v) => v === null)) continue;
+    // Lo que sigue a la unidad debe ser una condición ("I F = 20mA"), no prosa ("with a 5 V supply").
+    const after = toks.slice(u + 1).map((t) => t.s).join(" ").replace(/^\(\d\)\s*/, "").trim();
+    if (after !== "" && !isConditionLine(after)) continue;
+    unit = toks[u].s;
+    unitIdx = u;
+    vals.push(...gv);
+    valueXc.push(...gx);
+    symmetric = sym;
+    i = j;
+    break;
   }
-  if (vals.length === 0) return null;
+  if (unitIdx < 0 || vals.length === 0) return null;
+  const tailText = toks.slice(unitIdx + 1).map((t) => t.s).join(" ").replace(/^\(\d\)\s*/, "").trim();
 
   // Si el valor va unido a una expresión (p. ej. "VCC + 0.3 V"), no es un límite simple.
   const before = toks[i];
@@ -268,13 +298,25 @@ export function parseParamRow(input: string | Token[]): ParsedParam | null {
 
   let symbol = "";
   const lead = leadingSymbol(head);
-  if (lead.used > 0 && head.length > lead.used) {
+  if (head.length === 2 && /^[A-Z]{2,4}$/.test(head[0].s) && /^[A-Z][A-Z0-9()]{1,6}$/.test(head[1].s)) {
+    // Fila con solo el símbolo en dos fragmentos ("BV CEO"): el nombre va en otras líneas.
+    symbol = head[0].s + head[1].s;
+    head = [];
+  } else if (lead.used > 0 && head.length > lead.used) {
     symbol = lead.symbol;
     head = head.slice(lead.used);
   } else if (lead.used > 0 && head.length === lead.used && lead.symbol.length >= 3) {
     // Fila con solo el símbolo ("V BP,NEG"): el nombre está en otras líneas, se deja vacío para revisar.
     symbol = lead.symbol;
     head = [];
+  } else if (
+    head.length >= 3 &&
+    /^[A-Z]$/.test(head[head.length - 2].s) &&
+    (/^[A-Z]{1,4}$/.test(head[head.length - 1].s) || (/^[a-z]{1,3}$/.test(head[head.length - 1].s) && !STOP_WORDS.has(head[head.length - 1].s)))
+  ) {
+    // Símbolo al final partido en dos ("Forward Voltage V F", "Input capacitance C in").
+    symbol = head[head.length - 2].s + head[head.length - 1].s;
+    head = head.slice(0, -2);
   } else if (head.length > 1 && TRAILING_SYMBOL.test(head[head.length - 1].s)) {
     // Símbolo al final del nombre: "Supply voltage V+", "Dropout voltage VDO", "Turn-on time ton".
     symbol = head[head.length - 1].s;
@@ -282,13 +324,19 @@ export function parseParamRow(input: string | Token[]): ParsedParam | null {
   }
 
   const name = head.map((t) => t.s).join(" ");
+  // Prosa y etiquetas de gráficas: nombre en minúscula sin símbolo, o letras sueltas separadas ("L o w - L e v e l").
+  if (symbol === "" && /^[a-z]/.test(name)) return null;
+  // Viñetas de portada ("• Total power dissipation: ≤ 400 mW"): son características, no filas de tabla.
+  if (/^[•·▪■●○-]\s/.test(name) || name.startsWith("•")) return null;
+  if (head.filter((t) => t.s.length === 1 && /[A-Za-z]/.test(t.s)).length >= 6) return null;
   // Un nombre sin al menos tres letras (p. ej. "V" o "at V CC") es un fragmento de condición.
   if (symbol === "" && (CONDITION_WORDS.has(head[0].s.toLowerCase()) || name.replace(/[^A-Za-z]/g, "").length < 3)) return null;
   if (symbol !== "" && name !== "" && name.replace(/[^A-Za-z]/g, "").length < 3) return null;
   // Fragmentos de tabla: un nombre con varios números no es un parámetro.
   if (head.filter((t) => NUMBER.test(t.s)).length >= 2) return null;
 
-  return { symbol, name, conditions, values: vals, valueXc, symmetric, range: false, unit };
+  const allConditions = [conditions, tailText].filter(Boolean).join(" · ");
+  return { symbol, name, conditions: allConditions, values: vals, valueXc, symmetric, range: false, unit };
 }
 
 /**
@@ -362,20 +410,22 @@ export function assignLimits(
  */
 export function parsePinRow(line: string): ParsedPin | null {
   const TYPE = "(?:Input(?:\\/output|\\/Output)?|Output|I\\/O|I|O|P|G|Power|Ground|Analog|Digital|Passive|Open[- ]drain|—|–)";
-  const multi = line.match(new RegExp(`^([A-Z][A-Za-z0-9]*(?: [A-Z]{1,3})?)\\s+(\\d{1,3})\\s+(\\d{1,3})\\s+(${TYPE})\\s*(.*)$`));
+  const multi = line.match(new RegExp(`^([A-Z][A-Za-z0-9]*(?: [A-Z]{1,3})?)\\s+(\\d{1,3})\\s+(\\d{1,3})\\s+(${TYPE})(?:\\s+(.*))?$`));
   if (multi) {
     const type = /^[—–]$/.test(multi[4]) ? "" : multi[4];
-    const role = [type, multi[5].trim()].filter(Boolean).join(" · ");
+    const role = [type, (multi[5] ?? "").trim()].filter(Boolean).join(" · ");
     return { number: Number(multi[2]), name: multi[1].replace(/\s+/g, ""), role };
   }
-  const numFirst = line.match(new RegExp(`^(\\d{1,3})\\s+([A-Z][A-Z0-9_\\/+-]{0,11})(?:\\s+(${TYPE}))?\\s*[—–-]?\\s*(.*)$`));
+  const numFirst = line.match(new RegExp(`^(\\d{1,3})\\s+([A-Z][A-Z0-9_\\/+-]{0,11})(?:\\s+(${TYPE})(?=\\s|$))?\\s*[—–-]?\\s*(.*)$`));
   if (numFirst) {
     const role = [numFirst[3] && !/^[—–]$/.test(numFirst[3]) ? numFirst[3] : "", numFirst[4].trim()].filter(Boolean).join(" · ");
     return { number: Number(numFirst[1]), name: numFirst[2], role };
   }
-  const nameFirst = line.match(new RegExp(`^([A-Z][A-Z0-9_\\/+-]{0,11})\\s+(\\d{1,3})\\s+(${TYPE}|[A-Za-z].*)$`));
+  const nameFirst = line.match(new RegExp(`^([A-Z][A-Z0-9_\\/+-]{0,11})\\s+(\\d{1,3})\\s+(?:(${TYPE})(?:\\s+(.*))?|([A-Za-z].*))$`));
   if (nameFirst) {
-    return { number: Number(nameFirst[2]), name: nameFirst[1], role: nameFirst[3].trim() };
+    const type = nameFirst[3] && !/^[—–]$/.test(nameFirst[3]) ? nameFirst[3] : "";
+    const role = nameFirst[5] ?? [type, (nameFirst[4] ?? "").trim()].filter(Boolean).join(" · ");
+    return { number: Number(nameFirst[2]), name: nameFirst[1], role: role.trim() };
   }
   return null;
 }

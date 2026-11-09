@@ -22,6 +22,10 @@ Motor genérico (no ligado a un componente):
 - **Extracción** (src/extract): reglas para cualquier datasheet. Probado con el NE555 real y con tres documentos sintéticos de estilos distintos (tablas partidas, símbolo al final, español con índice). Lo que no se reconoce se marca para revisión; nunca se inventa un valor.
 - **Simulación** (src/sim/templates.ts): cada circuito es una plantilla con sus parámetros, su netlist y su medida frente a la ecuación de referencia. Plantillas: astable NE555, filtro RC (verificado con dos juegos de valores), y netlist libre.
 
+- **OCR local** (src/ocr): si un PDF no tiene texto seleccionable (escaneo), se lee con tesseract.js en el navegador. El motor, el worker y los datos de idioma salen del propio sitio (public/ocr, copiados por scripts/copy-ocr-assets.mjs): no se descarga nada de un CDN. Resolución explícita por página y modo de columna; las filas obtenidas con OCR llevan la nota "OCR: verificar contra la página", porque el OCR puede confundir caracteres.
+
+Validado con datasheets reales de TI, onsemi, Nexperia, Everlight, Sharp (escaneo), Mornsun, Microne, Hongfa y módulos (ESP8266, HC-SR04). Los resultados varían por documento; lo que no se reconoce se deja para revisión manual.
+
 Pendiente: enlazar automáticamente un análisis con una plantilla y capturar la tabla eléctrica del NE555 por líneas.
 
 Ver el plan completo en la documentación del proyecto.

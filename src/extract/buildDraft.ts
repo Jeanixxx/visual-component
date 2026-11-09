@@ -22,6 +22,8 @@ export interface DraftMeta {
   fileName: string;
   hash: string;
   pages: number;
+  /** true si el texto salió de OCR: cada parámetro queda con una nota para verificarlo. */
+  ocr?: boolean;
 }
 
 /** Texto que puede ser la función de un pin: no es encabezado, pie de página ni nota. */
@@ -156,7 +158,7 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
         const param = parseParamRow(line.toks);
         if (param) {
           const limits = assignLimits(paramSection, param, columns);
-          const notes = [param.conditions, limits.note].filter(Boolean).join(" · ");
+          const notes = [param.conditions, limits.note, meta.ocr ? "OCR: verificar contra la página" : ""].filter(Boolean).join(" · ");
           parameters.push({
             symbol: param.symbol,
             name: param.name,
@@ -192,13 +194,22 @@ export function buildDraft(pages: PageLines[], meta: DraftMeta): Analysis {
   flushBalls();
   flushParams();
 
+  // Un pin aparece en la tabla y en el dibujo del encapsulado: se conserva la fila con más información.
+  const bestPin = new Map<string, Pin>();
+  for (const p of pins) {
+    const key = `${p.name.toUpperCase()}|${p.number}`;
+    const cur = bestPin.get(key);
+    if (!cur || p.role.length > cur.role.length) bestPin.set(key, p);
+  }
+  const uniquePins = pins.filter((p) => bestPin.get(`${p.name.toUpperCase()}|${p.number}`) === p);
+
   const now = new Date().toISOString();
   return {
     id: `${meta.component}-${meta.hash.slice(0, 8)}`,
     component: meta.component,
     manufacturer: meta.manufacturer,
     datasheet: { hash: meta.hash, pages: meta.pages, fileName: meta.fileName },
-    pins,
+    pins: uniquePins,
     parameters,
     equations,
     netlist: null,

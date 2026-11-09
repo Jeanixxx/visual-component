@@ -5,16 +5,21 @@
   "description": "Amper: analiza datasheets de componentes electrónicos y los convierte en circuitos simulados y animados.",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-ocr-assets.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-ocr-assets.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "1.0.0",
     "eecircuit-engine": "1.9.0",
     "pdfjs-dist": "4.10.38",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "tesseract.js": "7.0.0",
+    "tesseract.js-core": "7.0.0"
   },
   "devDependencies": {
     "@types/react": "18.3.12",

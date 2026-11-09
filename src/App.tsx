@@ -5,6 +5,7 @@ import { loadPdf, PdfLoadError, type LoadedPdf } from "./pdf/loadPdf";
 import { PdfViewer } from "./components/PdfViewer";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { extractPageLines, type PageLines } from "./extract/pdfLines";
+import { looksScanned, ocrPdf, OCR_MAX_PAGES } from "./ocr/ocr";
 import { buildDraft } from "./extract/buildDraft";
 import { Simulator } from "./components/Simulator";
 import { LibraryPanel } from "./components/LibraryPanel";
@@ -20,6 +21,7 @@ export function App() {
   const [component, setComponent] = useState("NE555");
   const [manufacturer, setManufacturer] = useState("Texas Instruments");
   const [extracting, setExtracting] = useState<number | null>(null);
+  const [note, setNote] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<Analysis | null>(null);
   const [library, setLibrary] = useState<Analysis[]>([]);
   const [libraryError, setLibraryError] = useState<string | null>(null);
@@ -78,11 +80,28 @@ export function App() {
 
   async function runExtraction() {
     if (!loaded) return;
-    const pages: PageLines[] = [];
+    let pages: PageLines[] = [];
+    let usedOcr = false;
+    setNote(null);
+    setError(null);
     try {
       for (let p = 1; p <= loaded.pages; p++) {
         setExtracting(p);
         pages.push(await extractPageLines(loaded.doc, p));
+      }
+      // Un PDF escaneado no tiene texto seleccionable: se lee con OCR local.
+      if (looksScanned(pages)) {
+        setNote("Este PDF no tiene texto seleccionable. Aplicando OCR local; puede tardar unos segundos por página…");
+        const ocr = await ocrPdf(loaded.doc, ({ page: p, total }) =>
+          setNote(`OCR local: página ${p} de ${total}…`),
+        );
+        pages = ocr.pages;
+        usedOcr = true;
+        setNote(
+          ocr.truncated
+            ? `El texto se obtuvo con OCR, solo de las primeras ${OCR_MAX_PAGES} páginas. Revisa los valores con cuidado.`
+            : "El texto se obtuvo con OCR. Revisa los valores con cuidado: el OCR puede confundir caracteres.",
+        );
       }
       const draft = buildDraft(pages, {
         component: component.trim() || "Componente",
@@ -90,6 +109,7 @@ export function App() {
         fileName: loaded.fileName,
         hash: loaded.hash,
         pages: loaded.pages,
+        ocr: usedOcr,
       });
       setAnalysis(draft);
       if (draft.pins.length === 0 && draft.parameters.length === 0) {
@@ -186,9 +206,11 @@ export function App() {
               <input value={manufacturer} onChange={(e) => setManufacturer(e.target.value)} />
             </label>
             <button onClick={runExtraction} disabled={extracting !== null}>
-              {extracting !== null ? `Extrayendo página ${extracting} de ${loaded.pages}…` : "Extraer borrador"}
+              {extracting !== null ? "Analizando…" : "Extraer borrador"}
             </button>
           </div>
+
+          {note && <p role="status" style={{ fontSize: 13, color: "#555" }}>{note}</p>}
 
           <PdfViewer doc={loaded.doc} page={page} onPageChange={setPage} />
         </section>
